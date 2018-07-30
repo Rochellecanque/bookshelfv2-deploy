@@ -6,11 +6,12 @@ from flask_sqlalchemy import SQLAlchemy
 from config import *
 from base64 import b64encode
 from datetime import date, datetime
-import base64, binascii, jsonpickle
+import base64, binascii, jsonpickle, os
 
 
 app = Flask(__name__)
-# app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:postgres@localhost/bookshelf'
+# app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:postgres@localhost/bookshelf'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'thisissecretkey'
 db = SQLAlchemy(app)
@@ -90,7 +91,7 @@ def get_one_user(username):
     user_data['birth_date'] = user.birth_date
     user_data['gender'] = user.gender
     user_data['profpic'] = base64.b64encode(user.profpic)
-    print(user_data)
+
     return jsonify({'user': user_data})
 
 
@@ -107,7 +108,7 @@ def create_user():
     latitude = google_dict['results'][0]['geometry']['location']['lat']
     longitude = google_dict['results'][0]['geometry']['location']['lng']
 
-    birthdate = datetime.datetime.strptime(data['birth_date'], '%Y-%d-%m').date()
+    birthdate = datetime.datetime.strptime(data['birth_date'], '%Y-%M-%d')
 
     new_user = User(username=data['username'], password=hashed_password, first_name=data['first_name'], last_name=data['last_name'],
                     contact_number=data['contact_number'], birth_date=birthdate, gender=data['gender'], longitude=longitude,
@@ -137,6 +138,11 @@ def create_user():
         return jsonify({'message': 'New user created!'})
     else:
         return jsonify({'message': 'username already created'})
+
+
+# @app.route('/mobile/signup', methods=['POST'])
+# def mobile_signup():
+
 
 
 #Profile Edit Current User
@@ -180,21 +186,8 @@ def login():
 
             return jsonify({'token': token})
 
-        else:
-            token = jwt.encode({'id': user.id, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)},
-                               app.config['SECRET_KEY'])
-
-            return jsonify({'token': token.decode('UTF-8')})
-
     return make_response('Could not verify', 401, {'WWW-Authenticate': 'Basic realm="Login required!"'})
 
-
-# @app.route('/user/<int:id>/bookshelf/', methods=['GET'])
-# def viewbooks(id):
-#
-# <<<<<<< HEAD
-#     books = ContainsAssociation.query.join(Bookshelf).filter_by(bookshelf_id = id).all()
-# =======
 
 #SET USER CURRENT LOCATION TO THE DATABASE
 #INPUT REQUIRED: JSON: {current_user, latitude, longitude}
@@ -361,7 +354,7 @@ def view_one_book(self):
         num2 = 0
         num1 = 0
         for book in book_rate:
-            print(book.rating)
+
             if book.rating == 1:
                 num1 = num1 + 1
             elif book.rating == 2:
@@ -382,7 +375,7 @@ def view_one_book(self):
         user_data['numofRates'] = 0
 
     output.append(user_data)
-    print(output)
+
     return jsonify({'book': output})
 
 
@@ -509,7 +502,7 @@ def ratebook(self):
                 total_rate = BookRateTotal(bookRated=contains.contains_id, numofRates=1, totalRate=data['ratings'])
                 db.session.add(total_rate)
                 db.session.commit()
-                print('new rate')
+
             else:
                 #if naa ga exist or na rate na sauna ang libro
                 # i-add niya ang number of Rates (which is kapila na rate ang libro)
@@ -517,7 +510,7 @@ def ratebook(self):
                 totalRate.numofRates = totalRate.numofRates + 1
                 totalRate.totalRate = totalRate.totalRate + float(data['ratings'])
                 db.session.commit()
-                print('added!!')
+
         else:
             #naa ang rate_check so naka rate na ang user sa libro sauna
             #so gi ilisdan ra ang rating sa rate association tapos gi ilisdan sad ang total rating para sakto
@@ -530,6 +523,123 @@ def ratebook(self):
 
 
     return make_response('Rate posted!')
+
+
+#unpublishedbook
+@app.route('/user/unpublished', methods=['POST'])
+@token_required
+def unpublished(self):
+
+    data = request.get_json()
+
+    book = Books.query.filter((Books.title == data['title']) &
+                              (Books.year_published == data['year_published']) & (Books.isbn == data['isbn'])
+                              & (Books.description == data['description'])).first()
+    # publisher = Publisher.query.filter(Publisher.publisher_name == data['publisher_name']).first()
+    author = Author.query.filter((Author.author_name == data['author_name'])).first()
+    if (book is None) or (author is None):
+        if author is None:
+            author = Author(author_name=data['author_name'])
+            db.session.add(author)
+            db.session.commit()
+            # publisher_id = Publisher.query.filter((Publisher.publisher_name == data['publisher_name'])).first()
+            # if author is None:
+            #     author = Author(author_name=data['author_name'])
+            #     db.session.add(author)
+            #     db.session.commit()
+            # elif author is not None:
+            #     author = Author.query.filter((Author.author_name == data['author_name'])).first()
+        elif author is not None:
+            author = Author.query.filter(Author.author_name == data['author_name']).first()
+            # publisher_id = Publisher.query.filter((Publisher.publisher_name == data['publisher_name'])).first()
+            # if author is None:
+            #     author = Author(data['author_name'])
+            #     db.session.add(author)
+            #     db.session.commit()
+            # elif author is not None:
+            #     author = Author.query.filter(Author.author_name == data['author_name']).first()
+
+        # publisher = Publisher.query.filter(Publisher.publisher_name == data['publisher_name']).first()
+        # publisher_id = publisher.publisher_id
+        bookshelf = Bookshelf.query.filter_by(bookshef_owner=data['current_user']).first()
+        book_check = Books.query.filter_by(isbn=data['isbn']).first()
+        author = Author.query.filter((Author.author_name == data['author_name'])).first()
+        if book_check is not None and (author is not None):
+            author1 = WrittenByAssociation.query.filter((WrittenByAssociation.book_id == book_check.book_id) & (WrittenByAssociation.author_id == author.author_id)).first()
+        if book_check is not None and (author1 is not None):
+            book_check1 = ContainsAssociation.query.filter((ContainsAssociation.shelf_id == bookshelf.bookshelf_id) and
+                                                           (ContainsAssociation.book_id == book_check.book_id)).first()
+            if book_check1 is not None:
+                #book_check1 = gi check if ga exist ba ang libro sa bookshelf sa user
+                return make_response('The book is already in your bookshelf!')
+
+
+        book = Books(title = data['title'], year_published = None, isbn = None, types=None, edition=None, publisher_id= None, description=data['description'], book_cover=data['book_cover'])
+        db.session.add(book)
+        db.session.commit()
+        get_category = Category.query.filter_by(category_name=data['category']).first()
+        if get_category is None:
+            set_category = Category(category_name=data['category'])
+            db.session.add(set_category)
+            db.session.commit()
+
+        get_category = Category.query.filter_by(category_name=data['category']).first()
+        category = CategoryAssociation(book_id=book.book_id, category_id=get_category.category_id)
+        db.session.add(category)
+        db.session.commit()
+
+        get_genre = Genre.query.filter_by(genre_name=data['genre']).first()
+        if get_genre is None:
+            set_genre = Genre(genre_name=data['genre'])
+            db.session.add(set_genre)
+            db.session.commit()
+
+        get_genre = Genre.query.filter_by(genre_name=data['genre']).first()
+        genre = HasGenreAssociation(genreId=get_genre.id_genre, bookId=book.book_id)
+        db.session.add(genre)
+        db.session.commit()
+
+        author = Author.query.filter_by(author_name=data['author_name']).first()
+        written = WrittenByAssociation(author.author_id, book.book_id)
+        db.session.add(written)
+        db.session.commit()
+
+        bookshelf = Bookshelf.query.filter_by(bookshef_owner=data['current_user']).first()
+        shelf_id = bookshelf.bookshelf_id
+        book1 = Books.query.filter_by(isbn=data['isbn']).first()
+        print data['methods']
+        method1 = json.dumps(data['methods'])
+        #for i in
+        method2 = json.loads(method1)
+        contain = ContainsAssociation(shelf_id=shelf_id, book_id=book.book_id, quantity= data['quantity'], availability='YES', methods=method2, price=data['price'])
+        check = ContainsAssociation.query.filter((ContainsAssociation.shelf_id == shelf_id) and
+                                                  (ContainsAssociation.book_id == book1.book_id)).first()
+        db.session.add(contain)
+        db.session.commit()
+
+        return jsonify({'message': 'New book created!'})
+
+    else:
+
+        bookshelf = Bookshelf.query.filter_by(bookshef_owner=data['current_user']).first()
+        shelf_id = bookshelf.bookshelf_id
+
+        bookquantity = ContainsAssociation.query.filter((ContainsAssociation.shelf_id == shelf_id) & (ContainsAssociation.book_id == book.book_id)).first()
+        if bookquantity is None:
+            method1 = json.dumps(data['methods'])
+            method2 = json.loads(method1)
+            contain = ContainsAssociation(shelf_id=shelf_id, book_id=book.book_id, quantity= data['quantity'], availability='YES', methods=method2, price=data['price'])
+            db.session.add(contain)
+            db.session.commit()
+
+        else:
+            curQuant = bookquantity.quantity
+
+            bookquantity.quantity = int(curQuant+1)
+            db.session.commit()
+
+    return jsonify({'message': 'New book counted!'})
+
 
     #ADDBOOK
 #INPUT REQUIRED: JSON: {publisher_name, title, isbn, year(Text-Date of Published), description
@@ -547,7 +657,7 @@ def ratebook(self):
 def addbook(self):
 
     data = request.get_json()
-    print(data['publisher_name'])
+
     book = Books.query.filter((Books.title == data['title']) &
                               (Books.year_published == data['year']) & (Books.isbn == data['isbn'])
                               & (Books.description == data['description'])).first()
@@ -588,7 +698,7 @@ def addbook(self):
                 #book_check1 = gi check if ga exist ba ang libro sa bookshelf sa user
                 return make_response('The book is already in your bookshelf!')
 
-        print(book_check)
+
         book = Books(title = data['title'], year_published = data['year'], isbn =data['isbn'], types=None, edition=None, publisher_id= publisher_id, description=data['description'], book_cover=data['book_cover'])
         db.session.add(book)
         db.session.commit()
@@ -622,8 +732,11 @@ def addbook(self):
         bookshelf = Bookshelf.query.filter_by(bookshef_owner=data['current_user']).first()
         shelf_id = bookshelf.bookshelf_id
         book1 = Books.query.filter_by(isbn=data['isbn']).first()
-        print(data['quantity'])
-        contain = ContainsAssociation(shelf_id=shelf_id, book_id=book.book_id, quantity= data['quantity'], availability='YES', methods=data['method'], price=data['price'])
+        print data['methods']
+        method1 = json.dumps(data['methods'])
+        #for i in
+        method2 = json.loads(method1)
+        contain = ContainsAssociation(shelf_id=shelf_id, book_id=book.book_id, quantity= data['quantity'], availability='YES', methods=method2, price=data['price'])
         check = ContainsAssociation.query.filter((ContainsAssociation.shelf_id == shelf_id) and
                                                   (ContainsAssociation.book_id == book1.book_id)).first()
         db.session.add(contain)
@@ -638,13 +751,15 @@ def addbook(self):
 
         bookquantity = ContainsAssociation.query.filter((ContainsAssociation.shelf_id == shelf_id) & (ContainsAssociation.book_id == book.book_id)).first()
         if bookquantity is None:
-            contain = ContainsAssociation(shelf_id=shelf_id, book_id=book.book_id, quantity= data['quantity'], availability='YES', methods=data['method'], price=data['price'])
+            method1 = json.dumps(data['methods'])
+            method2 = json.loads(method1)
+            contain = ContainsAssociation(shelf_id=shelf_id, book_id=book.book_id, quantity= data['quantity'], availability='YES', methods=method2, price=data['price'])
             db.session.add(contain)
             db.session.commit()
-            print('book quantity is None')
+
         else:
             curQuant = bookquantity.quantity
-            print('book quantity is not None')
+
             bookquantity.quantity = int(curQuant+1)
             db.session.commit()
 
@@ -731,7 +846,7 @@ def author_check(self):
 def title_check(self):
     data = request.get_json()
     books = Books.query.filter(Books.title.like(data['title'])).all()
-    print(books)
+
     if not books:
         return make_response('Book not found')
     else:
@@ -862,7 +977,7 @@ def view_genre(self, genre_name):
     output = []
 
     for book in books:
-        print(book)
+
         book_ = Books.query.filter_by(book_id=book.book_id).first()
         owner_contains = ContainsAssociation.query.filter_by(book_id=book_.book_id).first()
         if owner_contains is None:
@@ -918,7 +1033,7 @@ def view_category(self, category_name):
     output = []
 
     for book in books:
-        print(book)
+
         book_ = Books.query.filter_by(book_id=book.book_id).first()
         owner_contains = ContainsAssociation.query.filter_by(book_id=book_.book_id).first()
         if owner_contains is None:
@@ -972,7 +1087,7 @@ def view_genre2(self, genre_name):
     output = []
 
     for book in books:
-        print(book)
+
         book_ = Books.query.filter_by(book_id=book.book_id).first()
         owner_contains = ContainsAssociation.query.filter_by(book_id=book_.book_id).first()
         if owner_contains is None:
@@ -1018,7 +1133,7 @@ def get_all_book(self):
     output2.append(user_data)
     books = Books.query.paginate(per_page=24, page=int(data['pagenum']), error_out=True).items
     for book in books:
-        print(book)
+
         owner_contains = ContainsAssociation.query.filter_by(book_id=book.book_id).all()
         for owner_contain in owner_contains:
             user_data = {}
@@ -1149,6 +1264,37 @@ def get_recent_books(self):
 
     return jsonify({'book': output})
 
+
+#INPUT:
+#       headers: {x-access-token}
+#       get borrowed books
+@app.route('/bookshelf/books/borrowed', methods=['GET'])
+@token_required
+def get_borrowed_books(self):
+    output = []
+    borrows = BorrowsAssociation.query.order_by(BorrowsAssociation.borrowed.desc()).limit(12).all()
+    for borrow in borrows:
+        book = Books.query.filter_by(book_id=borrow.bookid).first()
+        user_data = {}
+        user_data['title'] = book.title
+        user_data['book_id'] = book.book_id
+        genre = HasGenreAssociation.query.filter_by(bookId=book.book_id).first()
+        genre_final = Genre.query.filter_by(id_genre=genre.genreId).first()
+        user_data['genre'] = genre_final.genre_name
+        book_author = WrittenByAssociation.query.filter_by(book_id=book.book_id).first()
+        author = Author.query.filter_by(author_id=book_author.author_id).first()
+        user_data['author_name'] = author.author_name
+        user_data['book_cover'] = book.book_cover
+        owner_bookshelf = Bookshelf.query.filter_by(bookshelf_id=borrow.shelf_id).first()
+        owner = User.query.filter_by(username=owner_bookshelf.bookshef_owner).first()
+        user_data['owner_fname'] = owner.first_name
+        user_data['owner_lname'] = owner.last_name
+        user_data['owner_username'] = owner.username
+        user_data['owner_bookshelfid'] = owner_bookshelf.bookshelf_id
+        output.append(user_data)
+    return jsonify({'book': output})
+
+
 #### WISHLIST ###
 #INPUT: JSON: {username(user), bookshelf_id(bookshelf_id sa tag-iya sa libro), book_id}
 #       headers: {x-access-token}
@@ -1164,13 +1310,12 @@ def add_wishlist(self):
     user = User.query.filter_by(username=data['username']).first()
     bookshelf = Bookshelf.query.filter_by(bookshef_owner=user.username).first()
     bookshelf_id = data['bookshelf_id']
-    print(bookshelf.bookshelf_id)
-    print(bookshelf_id)
+
     if int(bookshelf_id) == int(user.id):
         return jsonify({'message': "You can't add your own book to your wishlist"})
     else:
         wishlist = Wishlist.query.filter((Wishlist.user_id==user.id) & (Wishlist.shelf_id==data['bookshelf_id']) & (Wishlist.bookId==data['book_id'])).first()
-        print(wishlist)
+
         if wishlist is not None:
             return jsonify({'message': "Book is already in wishlist"})
 
@@ -1313,12 +1458,12 @@ def rate_user(self):
                 total_rate = UserRateTotal(userRatee=user.id, numOfRates=1, totalRate=data['ratings'])
                 db.session.add(total_rate)
                 db.session.commit()
-                print('new rate')
+
             else:
                 totalRate.numOfRates = totalRate.numOfRates + 1
                 totalRate.totalRate = totalRate.totalRate + float(data['ratings'])
                 db.session.commit()
-                print('added!!')
+
         else:
             totalRate2 = UserRateTotal.query.filter_by(userRatee=user.id).first()
             totalRate2.totalRate = totalRate2.totalRate - rate_check.rating
@@ -1391,7 +1536,7 @@ def get_user_ratings(self):
         num2 = 0
         num1 = 0
         for book in book_rate:
-            print(book.rating)
+
             if book.rating == 1:
                 num1 = num1 + 1
             elif book.rating == 2:
@@ -1497,9 +1642,7 @@ def search():
 @token_required
 def store_search(self):
     data = request.get_json()
-    print(data['search'])
-    print(data['genre'])
-    print(data['time'])
+
     today = datetime.date.today()
     genre = Genre.query.filter_by(genre_name=data['genre']).first()
     if not data['search'] and (genre is None and data['time'] is None):
@@ -1621,11 +1764,8 @@ def store_search(self):
             else:
                 continue
 
-    print(output)
-    return jsonify({'book': output, 'totalBooks': output2})
 
-# @app.route('/addbok/<int:id>')
-# def addbook(id):
+    return jsonify({'book': output, 'totalBooks': output2})
 
 
 # addbook check by ISBN
@@ -1635,7 +1775,7 @@ def mobile_isbn_check(self, isbn):
     # data = request.get_json()
 
     book = Books.query.filter_by(isbn=isbn).first()
-    print(book)
+
     if book is not None:
         output = []
         user_data = {}
@@ -1699,15 +1839,13 @@ def mobile_isbn_check(self, isbn):
                 book['description'] = resp2['items'][0]['volumeInfo']['description']
                 book['year'] = resp2['items'][0]['volumeInfo']['publishedDate']
         output.append(book)
-        print(output[0])
-    return jsonify(output)
+    return jsonify({'book': output})
 
 
 # addbook check by TITLE
 @app.route('/mobile/user/title_check/<title>', methods=['GET'])
 @token_required
 def mobile_title_check(self, title):
-    print(title)
     url = "https://www.googleapis.com/books/v1/volumes?q=intitle:{0}&key=AIzaSyAOeYMvF7kPJ7ZcAjOVWiRA8PjCk5E_TsM&maxResults=40".format(
         title)
     response = requests.get(url)
@@ -1736,7 +1874,6 @@ def mobile_title_check(self, title):
         if int(resp['totalItems']) == 0:  # way libro gikan sa google
             return jsonify(output)
         else:
-            print(response.text)  # ani ang itsura sa results gikan google
             for book_item in resp['items']:
                 books = {}
                 if ((('publisher' in book_item['volumeInfo']) and ('industryIdentifiers' in book_item['volumeInfo']))
@@ -1752,7 +1889,7 @@ def mobile_title_check(self, title):
                     output.append(books)
                 else:
                     continue
-            return jsonify(output)
+            return jsonify({'book': output})
 
 
 # search by authorname
@@ -1764,7 +1901,6 @@ def mobile_author_check(self, author_name):
         author)
     response = requests.get(url)
     resp = json.loads(response.text)
-    print(resp)
     author = Author.query.filter_by(author_name=author_name).first()
     if int(resp['totalItems']) == 0 and author is None:
         return make_response('No books found')
@@ -1791,7 +1927,6 @@ def mobile_author_check(self, author_name):
                 output.append(books1)
     else:
         output = []
-        print(response.text)  # ani ang itsura sa results gikan google
         for book_item in resp['items']:
             books = {}
             if ((('publisher' in book_item['volumeInfo']) and ('industryIdentifiers' in book_item['volumeInfo']))
@@ -1830,7 +1965,7 @@ def mobile_author_check(self, author_name):
                 books1['types'] = book.types
                 output.append(books1)
 
-        return jsonify(output)
+        return jsonify({'book': output})
 
 
 @app.route('/bookshelf/borrow_book', methods=['POST'])
@@ -1841,10 +1976,9 @@ def add_borrow(self):
     user = User.query.filter_by(username=data['book_owner']).first() #for owner id
     current_user = User.query.filter_by(username=data['book_borrower']).first()    #for borrower id
     bookshelf = Bookshelf.query.filter_by(bookshef_owner=user.username).first()
-    print(bookshelf.bookshelf_id)
-    print(user.id)
+
     borrow = WaitingList.query.filter((WaitingList.borrower==current_user.id) & (WaitingList.owner_shelf_id==data['bookshelf_id']) & (WaitingList.bookid==data['book_id'])).first()
-    print(borrow)
+
     if borrow is not None:
         return make_response("You've already requested for this book.")
 
@@ -1862,10 +1996,9 @@ def add_rent(self):
     user = User.query.filter_by(username=data['book_owner']).first() #for owner id
     current_user = User.query.filter_by(username=data['book_borrower']).first()    #for borrower id
     bookshelf = Bookshelf.query.filter_by(bookshef_owner=user.username).first()
-    print(bookshelf.bookshelf_id)
-    print(user.id)
+
     borrow = WaitingList.query.filter((WaitingList.borrower==current_user.id) & (WaitingList.owner_shelf_id==data['bookshelf_id']) & (WaitingList.bookid==data['book_id'])).first()
-    print(borrow)
+
     if borrow is not None:
         return make_response("You've already requested for this book.")
 
@@ -1882,10 +2015,9 @@ def add_purchase(self):
     user = User.query.filter_by(username=data['book_owner']).first() #for owner id
     current_user = User.query.filter_by(username=data['book_buyer']).first()    #for borrower id
     bookshelf = Bookshelf.query.filter_by(bookshef_owner=user.username).first()
-    print(bookshelf.bookshelf_id)
-    print(user.id)
+
     borrow = WaitingList.query.filter((WaitingList.borrower==current_user.id) & (WaitingList.owner_shelf_id==data['bookshelf_id']) & (WaitingList.bookid==data['book_id'])).first()
-    print(borrow)
+
     if borrow is not None:
         return make_response("You've already requested for this book.")
 
@@ -1924,7 +2056,7 @@ def show_borrow(self):
         user_data['owner_username'] = owner.username
         output.append(user_data)
 
-    print(output)
+
     return jsonify({'books': output})
 
 @app.route('/bookshelf/requests/user', methods=['GET'])
@@ -1962,7 +2094,7 @@ def show_requests(self):
         user_data['owner_username'] = owner.username
         output.append(user_data)
 
-    print(output)
+
     return jsonify({'books': output})
 
 @app.route('/bookshelf/remove_borrow', methods=['POST'])

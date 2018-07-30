@@ -427,5 +427,3 @@ class ActLogs(db.Model):
         self.status = status
         self.bookid = bookid
 
-
-db.create_all()
