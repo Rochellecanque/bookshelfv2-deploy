@@ -3,7 +3,8 @@ from flask import Flask
 import sqlalchemy, datetime
 from flask_login import UserMixin
 
-from app import app
+from __init__ import app
+
 
 db = SQLAlchemy(app)
 
@@ -24,14 +25,13 @@ class User(UserMixin, db.Model):
     address = db.Column(db.String(100))
     bookshelf_user = db.relationship('Bookshelf', uselist=False, backref='user_bookshelf')
     borrow_bookshelfs = db.relationship('BorrowsAssociation', backref='user_borrow')
-    borrow_bookshelfs = db.relationship('BorrowsAssociation', backref='user_borrow')
     rent_bookshelfs = db.relationship('RentAssociation', backref='user_rent')
     waitinglist = db.relationship('WaitingList', backref='user_watinglist')
     wishlists_bookshelf = db.relationship('Wishlist', backref='user_wishlist')
     user_interest = db.relationship('InterestAssociation', backref='user_interest')
 
-    def __init__(self, username='', password='', first_name='', last_name='', contact_number='', birth_date='', gender='',
-                 longitude='', latitude='', profpic='', address=''):
+    def __init__(self, username='', password='', first_name='', last_name='', contact_number='', birth_date='',
+                 gender='', longitude='', latitude='', profpic='', address=''):
         self.username = username
         self.password = password
         self.first_name = first_name
@@ -44,18 +44,16 @@ class User(UserMixin, db.Model):
         self.profpic = profpic
         self.address = address
 
-
 class Token(db.Model):
     __tablename__ = 'token'
     id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    token = db.Column(db.String(125),primary_key=True)
-    TTL =db.Column(db.DateTime)
+    token = db.Column(db.String(125), primary_key=True)
+    TTL = db.Column(db.DateTime)
 
-    def __init__(self, id ='', token ='', TTL = ''):
+    def __init__(self, id='', token='', TTL=''):
         self.id = id
         self.token = token
         self.TTL = TTL
-
 
 class Bookshelf(db.Model):
     __tablename__ = 'bookshelf'
@@ -63,7 +61,6 @@ class Bookshelf(db.Model):
     bookshef_owner = db.Column(db.String, db.ForeignKey('user.username'))
     owner = db.relationship('User', backref='bookshelf_owner')
     booksContain = db.relationship('ContainsAssociation', backref=db.backref('bookshelf_contains'))
-    borrow_users = db.relationship('BorrowsAssociation', backref='bookshelfBooks')
     borrow_users = db.relationship('BorrowsAssociation', backref='bookshelfBooks')
     rent_users = db.relationship('RentAssociation', backref='rentBooks')
     waitinglist = db.relationship('WaitingList', backref='waitingBooks')
@@ -80,13 +77,13 @@ class Books(db.Model):
     __tablename__ = 'books'
     book_id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.TEXT, nullable=False)
-    description = db.Column(db.VARCHAR)
+    description = db.Column(db.VARCHAR, nullable=True)
     edition = db.Column(db.Integer, nullable=True)
     year_published = db.Column(db.String(500), nullable=True)
-    isbn = db.Column(db.String(20), nullable=False, unique=True)
+    isbn = db.Column(db.String(20), nullable=True, unique=True)
     types = db.Column(db.String(20), nullable=True)
-    book_cover = db.Column(db.TEXT)
-    publisher_id = db.Column(db.Integer, db.ForeignKey('publisher.publisher_id'))
+    book_cover = db.Column(db.TEXT, nullable=True)
+    publisher_id = db.Column(db.Integer, db.ForeignKey('publisher.publisher_id'), nullable=True)
     bookshelfBooks = db.relationship('ContainsAssociation', backref='books_contains')
     categoryBooks = db.relationship('CategoryAssociation', backref='books_category')
     booksAuthor = db.relationship('WrittenByAssociation', backref='books_author')
@@ -112,7 +109,8 @@ class ContainsAssociation(db.Model):
     quantity = db.Column(db.Integer)
     availability = db.Column(db.String(3))
     methods= db.Column(db.String(50))
-    price = db.Column(db.Integer)
+    price = db.Column(db.Integer, nullable=True)
+    price_rate = db.Column(db.Integer, nullable=True)
     date = db.Column(db.DateTime, default=datetime.datetime.today)
     shelf_id = db.Column(db.Integer, db.ForeignKey('bookshelf.bookshelf_id'))
     book_id = db.Column(db.Integer, db.ForeignKey('books.book_id'))
@@ -121,12 +119,13 @@ class ContainsAssociation(db.Model):
     bookshelfcontain = db.relationship('Bookshelf', backref='containingbooks')
     containsbooks = db.relationship('Books', backref='booksBookshelf')
 
-    def __init__(self, shelf_id='', book_id='', quantity='', availability='', methods='', price=''):
+    def __init__(self, shelf_id='', book_id='', quantity='', availability='', methods='', price='', price_rate=''):
         self.shelf_id = shelf_id
         self.book_id = book_id
         self.quantity = quantity
         self.methods = methods
         self.price = price
+        self.price_rate = price_rate
         self.availability = availability
 
 class Category(db.Model):
@@ -212,6 +211,9 @@ class InterestAssociation(db.Model):
     user = db.relationship('User', backref='Interestuser')
     genre = db.relationship('Genre', backref='Interestgenre')
 
+
+
+
 class PurchaseAssociation(db.Model):
     __tablename__ = 'purchase'
     purchase_id = db.Column(db.Integer, primary_key=True)
@@ -231,14 +233,26 @@ class PurchaseAssociation(db.Model):
         self.price = price
         self.bookid = bookid
 
+class CodeVerification(db.Model):
+    __tablename__ = 'CodeVerification'
+    code_id = db.Column(db.Integer, primary_key = True)
+    code = db.Column(db.String, nullable=False)
+    owner_id = db.Column(db.Integer)
+    borrower_id = db.Column(db.Integer)
+    book_id = db.Column(db.Integer)
+
+    def __init__(self, code='', owner_id='', borrower_id='', book_id=''):
+        self.code = code
+        self.owner_id = owner_id
+        self.borrower_id = borrower_id
+        self.book_id = book_id
 
 
 class WaitingList(db.Model):
     waiting_id = db.Column(db.Integer, primary_key=True)
     approval = db.Column(db.Boolean, nullable=True)
     method = db.Column(db.String)
-    date = db.Column(db.DateTime, default=datetime.datetime.today)
-    request_Date = db.Column(db.DateTime, nullable=True)
+    request_Date = db.Column(db.Integer, nullable=True)
     borrower = db.Column(db.Integer, db.ForeignKey('user.id'))
     price = db.Column(db.Integer, nullable=True)
     price_rate = db.Column(db.Integer, nullable=True)
@@ -256,7 +270,6 @@ class WaitingList(db.Model):
         self.bookid = bookid
         self.method = method
         self.request_Date = request_Date
-
 class RentAssociation(db.Model):
     __tablename__ = 'rents'
     borrowed = db.Column(db.Integer, primary_key=True)
@@ -304,6 +317,7 @@ class BorrowsAssociation(db.Model):
         self.verification = verification
         self.startDate = startDate
         self.returnDate = returnDate
+
 
 class Wishlist(db.Model):
     __tablename__ = "wishlist"
@@ -411,19 +425,153 @@ class UserCommentAssociation(db.Model):
         self.user_idCommentee = user_idCommentee
         self.comment = comment
 
+class Message(db.Model):
+    __tablename__ = 'Message'
+    message_id = db.Column(db.Integer, primary_key=True)
+    inbox_id = db.Column(db.Integer, nullable=False)
+    datetime = db.Column(db.DateTime, default=datetime.datetime.now)
+    message_from = db.Column(db.Integer, nullable=False)
+    message_to = db.Column(db.Integer, nullable=False)
+    content = db.Column(db.String(280))
+
+    def __init__(self, message_from='', message_to='', content='', inbox_id=''):
+        self.inbox_id = inbox_id
+        self.message_from = message_from
+        self.message_to = message_to
+        self.content = content
+
+class Inbox(db.Model):
+    __tablename__ = 'Inbox'
+    inbox_id = db.Column(db.Integer, primary_key=True)
+    user1 = db.Column(db.Integer, nullable=False)
+    user2 = db.Column(db.Integer, nullable=False)
+
+    def __init__(self, user1='', user2=''):
+        self.user1 = user1
+        self.user2 = user2
+
+
+# class Message(db.Model):
+#     __tablename__ = 'message'
+#     message_id = db.Column(db.Integer, primary_key=True)
+#     messageFrom = db.Column(db.Integer, db.ForeignKey('user.id'))
+#     messageTo = db.Column(db.Integer, db.ForeignKey('user.id'))
+#     content = db.Column(db.String(100))
+#     messaging_message = db.relationship('MessageAssociation', backref='messaging')
+#
+#     def __init__(self, messageFrom='', messageTo='', content='' ):
+#         self.messageFrom = messageFrom
+#         self.messageTo = messageTo
+#         self.content = content
+#
+# class MessageAssociation(db.Model):
+#     __tablename__ = 'messaging'
+#     message_id = db.Column(db.Integer, db.ForeignKey('message.message_id'), primary_key=True)
+#     messageFrom = db.Column(db.Integer, db.ForeignKey('user.id'))
+#     messageTo = db.Column(db.Integer, db.ForeignKey('user.id'))
+#     content = db.Column(db.String(100), db.ForeignKey('message.content'))
+#     date = db.Column(db.DATE, nullable=False)
+#     user = db.relationship('User', backref='userMessage')
+#     messaging = db.relationship('Message', backref='hasMessage')
+#
+#     def __init__(self, messageFrom='', messageTo='', content='', date='' ):
+#         self.messageFrom = messageFrom
+#         self.messageTo = messageTo
+#         self.content = content
+#         self.date = date
+
 
 class ActLogs(db.Model):
     __tablename__ = 'actlogs'
     logs = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    shelf_id = db.Column(db.Integer, db.ForeignKey('bookshelf.bookshelf_id'))
+    current_user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    other_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    type = db.Column(db.String)
     date = db.Column(db.DateTime, default=datetime.datetime.today)
     status = db.Column(db.Integer)
-    bookid = db.Column(db.Integer, db.ForeignKey('contains.contains_id'))
+    bookid = db.Column(db.Integer, nullable=True)
 
-    def __init__(self, user_id='', shelf_id='', status='', bookid=''):
-        self.user_id = user_id
-        self.shelf_id = shelf_id
+    def __init__(self, current_user_id='', other_user_id='', status='', bookid='', type=''):
+        self.current_user_id = current_user_id
+        self.other_user_id = other_user_id
         self.status = status
         self.bookid = bookid
+        self.type = type
 
+class Notifications(db.Model):
+    __tablename__ = 'notifications'
+    logs = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    bookshelf_id = db.Column(db.Integer, db.ForeignKey('bookshelf.bookshelf_id'), nullable=True)
+    book_id = db.Column(db.Integer, db.ForeignKey('books.book_id'), nullable=True)
+    current_user = db.Column(db.Integer, db.ForeignKey('user.id'))
+    date = db.Column(db.DateTime, default=datetime.datetime.today)
+    last_open = db.Column(db.DateTime, nullable=True)
+    type = db.Column(db.String)
+
+
+    def __init__(self, user_id='', last_open='', current_user='', type='', bookshelf_id='', book_id=''):
+        self.user_id = user_id
+        self.current_user = current_user
+        self.last_open = last_open
+        self.type = type
+        self.bookshelf_id = bookshelf_id
+        self.book_id = book_id
+
+
+class Followers(db.Model):
+    __tablename__ = 'followers'
+    follow_id = db.Column(db.Integer, primary_key=True)
+    followed_username = db.Column(db.String, nullable=False)
+    follower_username = db.Column(db.String, nullable=False)
+
+    def __init__(self, follow_id='', followed_username='', follower_username=''):
+        self.followed_username = followed_username
+        self.follower_username = follower_username
+
+class BookReview(db.Model):
+    __tablename__ = 'bookReview'
+    review_id = db.Column(db.Integer, primary_key=True)
+    book_id = db.Column(db.Integer, nullable=False)
+    user_id = db.Column(db.Integer, nullable=False)
+    comment = db.Column(db.TEXT)
+    rating = db.Column(db.Integer)
+    date = db.Column(db.DateTime, default=datetime.datetime.today)
+
+    def __init__(self, book_id='', user_id='', comment='', rating=''):
+        self.book_id = book_id
+        self.user_id = user_id
+        self.comment = comment
+        self.rating = rating
+
+
+class BookReview_RateTotal(db.Model):
+    __tablename__ = 'bookReviewRateTotal'
+    book_total_rate_id = db.Column(db.Integer, primary_key=True)
+    book_id = db.Column(db.Integer, nullable=False)
+    numOfRates = db.Column(db.Integer)
+    totalRate = db.Column(db.Float)
+
+    def __init__(self, book_id='', totalRate='', numOfRates=''):
+        self.book_id = book_id
+        self.totalRate = totalRate
+        self.numOfRates = numOfRates
+
+class Transactions(db.Model):
+    __tablename__ = 'transactions'
+    transaction_id = db.Column(db.Integer, primary_key=True)
+    book_id = db.Column(db.Integer, nullable=False)
+    owner_id = db.Column(db.Integer, nullable=False)
+    borrower_id = db.Column(db.Integer, nullable=False)
+    type = db.Column(db.String)
+    total = db.Column(db.Integer)
+    date = db.Column(db.DateTime, default=datetime.datetime.today)
+
+    def __init__(self, book_id, owner_id, borrower_id, total, type):
+        self.book_id = book_id
+        self.owner_id = owner_id
+        self.borrower_id = borrower_id
+        self.total = total
+        self.type = type
+
+db.create_all()
